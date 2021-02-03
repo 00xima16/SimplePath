@@ -35,7 +35,7 @@ local function validate(self)
 	local exists = nil
 	if #Objects > 0 then
 		for i = 1, #Objects do
-			if Objects[i][1] == nil or Objects[i][2] == nil then
+			if Objects[i][1] == nil or Objects[i][1].Parent == nil then
 				table.remove(Objects, i)
 			end
 			if Objects[i][1] == self.Rig then

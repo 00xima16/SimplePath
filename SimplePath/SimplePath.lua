@@ -18,6 +18,9 @@ local function onWaypointReached(self, reached)
 	if reached and self.currentWaypoint < #self.Waypoints and self.Running then
 		self.currentWaypoint += 1
 		move(self)
+		if self.waypointsFolder then
+			self.waypointsFolder[self.currentWaypoint - 1].BrickColor = BrickColor.new("Bright green")
+		end	
 	else
 		self:Stop("Success: Path Reached")
 	end
@@ -38,8 +41,9 @@ local function validate(self)
 			if Objects[i][1] == nil or Objects[i][1].Parent == nil then
 				table.remove(Objects, i)
 			end
-			if Objects[i][1] == self.Rig then
+			if Objects[i] and Objects[i][1] == self.Rig then
 				exists = Objects[i][2]
+				break
 			end
 		end
 	end
@@ -91,6 +95,8 @@ function Path.new(Rig, PathParams)
 end
 
 function Path:Stop(Status)
+	self.Running = nil
+	wait(0.001)
 	if self.connection and self.connection.Connected then
 		self.connection:Disconnect()
 	end
@@ -99,12 +105,18 @@ function Path:Stop(Status)
 	end
 	self.blockedConnection = nil
 	self.connection = nil
-	self.Running = nil
+	if self.waypointsFolder then
+		self.waypointsFolder:Destroy()
+		self.waypointsFolder = nil
+	end
 	self.__Completed:Fire(Status, self.Rig, self.finalPosition)
 	return
 end
 
-function Path:Run(finalPosition)
+function Path:Run(finalPosition, showWaypoints)
+	if self.busy then return end
+	self.busy = true
+	
 	if self.Running then self:Stop("Stopped Previous Path") end
 	self.Running = true
 	
@@ -124,7 +136,25 @@ function Path:Run(finalPosition)
 		self.__Blocked:Fire(BlockedWaypoint, self.currentWaypoint, self.Waypoints)
 	end)
 	
+	
+	if showWaypoints then
+		self.waypointsFolder = Instance.new("Folder", workspace)
+		for index, waypoint in ipairs(self.Waypoints) do
+			local part = Instance.new("Part")
+			part.Name = tostring(index)
+			part.Size = Vector3.new(1, 1, 1)
+			part.Position = waypoint.Position
+			part.Anchored = true
+			part.CanCollide = false
+			part.Parent = self.waypointsFolder
+			part.Material = Enum.Material.Neon
+			part.BrickColor = BrickColor.new("Neon orange")
+		end
+	end
+	
 	move(self)
+	
+	self.busy = false
 	
 end
 

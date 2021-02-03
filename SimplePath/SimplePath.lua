@@ -96,7 +96,7 @@ end
 
 function Path:Stop(Status)
 	self.Running = nil
-	wait(0.001)
+	wait(0.02999)
 	if self.connection and self.connection.Connected then
 		self.connection:Disconnect()
 	end

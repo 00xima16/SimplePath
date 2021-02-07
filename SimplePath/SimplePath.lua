@@ -31,7 +31,7 @@ local function timeoutLoop(self)
 		if self.elapsed and (tick() - self.elapsed) >= self.Timeout then
 			self:Stop("Error: MoveTo Timeout")
 		end
-	wait(0.1) end
+	self.Wait(0.001) end
 end
 
 local function validate(self)
@@ -40,6 +40,8 @@ local function validate(self)
 		for i = 1, #Objects do
 			if Objects[i][1] == nil or Objects[i][1].Parent == nil then
 				table.remove(Objects, i)
+				validate(self)
+				break
 			end
 			if Objects[i] and Objects[i][1] == self.Rig then
 				exists = Objects[i][2]
@@ -65,9 +67,10 @@ local function removeObject(self)
 	end
 end
 
-function Path.new(Rig, PathParams)
+function Path.new(Rig, PathParams, StorePath)
 	
 	local self = setmetatable({}, Path)
+	self.Wait = require(script.CustomWait)
 	
 	self.Rig = Rig
 	self.HumanoidRootPart = Rig:WaitForChild("HumanoidRootPart")
@@ -91,12 +94,16 @@ function Path.new(Rig, PathParams)
 		self.HumanoidRootPart:SetNetworkOwner(nil)
 	end
 	
-	return validate(self, Rig)
+	if StorePath == nil or StorePath then
+		return validate(self, Rig)
+	else
+		return self
+	end
 end
 
 function Path:Stop(Status)
 	self.Running = nil
-	wait(0.02999)
+	self.Wait(0.02)
 	if self.connection and self.connection.Connected then
 		self.connection:Disconnect()
 	end
@@ -136,6 +143,9 @@ function Path:Run(finalPosition, showWaypoints)
 		self.__Blocked:Fire(BlockedWaypoint, self.currentWaypoint, self.Waypoints)
 	end)
 	
+	if game:FindFirstChild("NetworkServer") ~= nil then
+		self.HumanoidRootPart:SetNetworkOwner(nil)
+	end
 	
 	if showWaypoints then
 		self.waypointsFolder = Instance.new("Folder", workspace)

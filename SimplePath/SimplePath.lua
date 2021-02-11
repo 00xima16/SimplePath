@@ -31,7 +31,7 @@ local function timeoutLoop(self)
 		if self.elapsed and (tick() - self.elapsed) >= self.Timeout then
 			self:Stop("Error: MoveTo Timeout")
 		end
-	self.Wait(0.001) end
+	self.Wait(0.00009) end
 end
 
 local function validate(self)
@@ -90,7 +90,7 @@ function Path.new(Rig, PathParams, StorePath)
 		self.Path = PathfindingService:CreatePath()
 	end
 	
-	if game:FindFirstChild("NetworkServer") ~= nil then
+	if game:FindFirstChild("NetworkServer") ~= nil and self.Rig:IsDescendantOf(workspace) then
 		self.HumanoidRootPart:SetNetworkOwner(nil)
 	end
 	
@@ -143,7 +143,7 @@ function Path:Run(finalPosition, showWaypoints)
 		self.__Blocked:Fire(BlockedWaypoint, self.currentWaypoint, self.Waypoints)
 	end)
 	
-	if game:FindFirstChild("NetworkServer") ~= nil then
+	if game:FindFirstChild("NetworkServer") ~= nil and self.Rig:IsDescendantOf(workspace) then
 		self.HumanoidRootPart:SetNetworkOwner(nil)
 	end
 	

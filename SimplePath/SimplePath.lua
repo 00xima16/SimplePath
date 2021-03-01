@@ -6,20 +6,41 @@ local RunService = game:GetService("RunService")
 local Path = {}
 Path.__index = Path
 
+local function FloorPoint(self, Position)
+	local Direction = Vector3.new(0, -100, 0)
+	local Params = RaycastParams.new()
+	Params.FilterType = Enum.RaycastFilterType.Blacklist
+	Params.FilterDescendantsInstances = {self.Rig}
+	local RaycastResult = workspace:Raycast(self.HumanoidRootPart.Position, Direction, Params)
+	if RaycastResult and RaycastResult.Position then
+		if Position then
+			return RaycastResult.Position
+		else
+			return math.abs(RaycastResult.Position.Y - self.HumanoidRootPart.Position.Y)
+		end
+	end
+	if Position then
+		return self.HumanoidRootPart.Position
+	else
+		return 1
+	end
+end
+
 local function move(self)
-	if self.Waypoints[self.currentWaypoint] and self.Running and (self.Waypoints[self.currentWaypoint].Position - self.HumanoidRootPart.Position).Magnitude > 4 then
-		self.Moving = true
+	if self.Waypoints[self.currentWaypoint] and self.Running and ((self.Waypoints[self.currentWaypoint].Position - FloorPoint(self, true)).Magnitude > FloorPoint(self)) then
 		self.Humanoid:MoveTo(self.Waypoints[self.currentWaypoint].Position)
 		self.elapsed = tick()
+		return true
 	elseif self.Waypoints[self.currentWaypoint] and self.Running and self.currentWaypoint < #self.Waypoints and self.Running then
 		self.currentWaypoint += 1
-		move(self)
 		if self.waypointsFolder then
 			self.waypointsFolder[self.currentWaypoint - 1].BrickColor = BrickColor.new("Bright green")
 		end
+		return move(self)
 	elseif self.Running then
 		self:Stop("Error: Invalid Waypoints")
 	end
+	return false
 end
 
 local function onWaypointReached(self, reached)
@@ -36,12 +57,10 @@ end
 
 local function timeoutLoop(self)
 	while self.Running do
-		if self.elapsed and (tick() - self.elapsed) >= self.Timeout and self.Running then
+		if self.elapsed and (tick() - self.elapsed) >= (self.Timeout or 16 / self.Humanoid.WalkSpeed) and self.Running then
 			self:Stop("Error: MoveTo Timeout")
-			if self.runOnTimeout then
-				self.Humanoid.Jump = true
-				self:Run(self.finalPosition, self.showWaypoints, true)
-			end
+			self.Humanoid.Jump = true
+			self:Run(self.finalPosition, self.showWaypoints, true)
 		end
 	RunService.Heartbeat:Wait() end
 end
@@ -86,7 +105,7 @@ function Path.new(Rig, PathParams, StorePath)
 	self.Rig = Rig
 	self.HumanoidRootPart = Rig:WaitForChild("HumanoidRootPart")
 	self.Humanoid = Rig:WaitForChild("Humanoid")
-	self.Timeout = 1
+	self.Timeout = nil
 	
 	self.__Blocked = Instance.new("BindableEvent")
 	self.__WaypointReached = Instance.new("BindableEvent")
@@ -99,10 +118,6 @@ function Path.new(Rig, PathParams, StorePath)
 		self.Path = PathfindingService:CreatePath(PathParams)
 	else
 		self.Path = PathfindingService:CreatePath()
-	end
-	
-	if game:FindFirstChild("NetworkServer") ~= nil and self.Rig:IsDescendantOf(workspace) then
-		self.HumanoidRootPart:SetNetworkOwner(nil)
 	end
 	
 	if StorePath == nil or StorePath then
@@ -131,7 +146,8 @@ function Path:Stop(Status)
 	return
 end
 
-function Path:Run(finalPosition, showWaypoints, runOnTimout)
+function Path:Run(finalPosition, showWaypoints)
+	
 	if self.busy then return end
 	self.busy = true
 	
@@ -142,22 +158,26 @@ function Path:Run(finalPosition, showWaypoints, runOnTimout)
 	local Success, _ = pcall(function()
 		self.Path:ComputeAsync(self.InitialPosition or self.HumanoidRootPart.Position, finalPosition)
 	end)
-	if self.Path.Status == Enum.PathStatus.NoPath or not Success then self:Stop("Error: No path found") self.busy = false return end
+	if not Success or self.Path.Status == Enum.PathStatus.NoPath then
+		self.busy = false
+		return false
+	end
+	
 	self.Waypoints = self.Path:GetWaypoints()
+	if not self.Waypoints or not self.Waypoints[1] then
+		self.busy = false
+		return false
+	end
 	
 	self.currentWaypoint = 1
-	self.runOnTimeout = runOnTimout
 	self.showWaypoints = showWaypoints
 	
 	self.connection = self.Humanoid.MoveToFinished:Connect(function(Reached)
-		self.Moving = nil
 		self.__WaypointReached:Fire(Reached, self.currentWaypoint, self.Waypoints)
 		onWaypointReached(self, Reached)
 	end)
-	coroutine.wrap(timeoutLoop)(self)
 	
 	self.blockedConnection = self.Path.Blocked:Connect(function(BlockedWaypoint)
-		self.Moving = nil
 		self.__Blocked:Fire(BlockedWaypoint, self.currentWaypoint, self.Waypoints)
 	end)
 	
@@ -180,9 +200,14 @@ function Path:Run(finalPosition, showWaypoints, runOnTimout)
 		end
 	end
 	
-	move(self)
+	if not move(self) then
+		self.busy = false
+		return false
+	end
 	
+	coroutine.wrap(timeoutLoop)(self)
 	self.busy = false
+	return true
 	
 end
 
